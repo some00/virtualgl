@@ -58,6 +58,7 @@ namespace client
 					if(socket) remoteName = socket->remoteName();
 					thread = new util::Thread(this);
 					thread->start();
+                    if (getenv("VGL_LZ4")) lz4 = true;
 				}
 
 				virtual ~Listener(void)
@@ -74,6 +75,7 @@ namespace client
 					if(!remoteName) vglout.PRINTLN("-- Disconnecting\n");
 					else vglout.PRINTLN("-- Disconnecting %s", remoteName);
 					delete socket;  socket = NULL;
+                    free(lz4_buffer);
 				}
 
 				void send(char *buf, int len);
@@ -92,6 +94,8 @@ namespace client
 				util::Socket *socket;
 				util::Thread *thread;
 				const char *remoteName;
+                char* lz4_buffer = nullptr;
+                bool lz4 = false;
 		};
 	};
 }

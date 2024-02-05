@@ -14,6 +14,7 @@
 
 #include "VGLTransReceiver.h"
 #include "vglutil.h"
+#include <lz4.h>
 
 using namespace util;
 using namespace common;
@@ -223,14 +224,38 @@ void VGLTransReceiver::Listener::run(void)
 				if(h.compress == RRCOMP_YUV)
 				{
 					((XVFrame *)f)->init(h);
+#if 0
+                    // TODO header.size is incorrect for this check
 					if(h.size != ((XVFrame *)f)->hdr.size && h.flags != RR_EOF)
 						THROW("YUV image size mismatch");
+#endif
 				}
 				else
 				#endif
 				((CompressedFrame *)f)->init(h, h.flags);
 				if(h.flags != RR_EOF)
-					recv((char *)(h.flags == RR_RIGHT ? f->rbits : f->bits), h.size);
+                {
+                    if (lz4)
+                    {
+                        lz4_buffer = reinterpret_cast<char*>(realloc(lz4_buffer, h.size));
+                        recv(lz4_buffer, h.size);
+                        const auto ret = LZ4_decompress_safe(
+                            lz4_buffer,
+                            reinterpret_cast<char*>(
+                                h.flags == RR_RIGHT ? f->rbits : f->bits),
+                            h.size,
+                            h.framew * h.frameh * f->pf->size + 1);
+                        if (ret < 0)
+                            THROW("Lz4 decompression error");
+                        f->hdr.size = ret;
+                        h.size = ret;
+                    }
+                    else
+                    {
+                        recv((char *)(h.flags == RR_RIGHT ? f->rbits : f->bits),
+                             h.size);
+                    }
+                }
 
 				if(!stereo || h.flags != RR_LEFT)
 				{

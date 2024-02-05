@@ -15,6 +15,7 @@
 #ifndef __VGLTRANS_H__
 #define __VGLTRANS_H__
 
+#include <tuple>
 #include "Socket.h"
 #include "Thread.h"
 #include "rr.h"
@@ -83,12 +84,14 @@ namespace server
 					#ifdef USEHELGRIND
 					ANNOTATE_BENIGN_RACE_SIZED(&deadYet, sizeof(bool), );
 					#endif
+                    if (getenv("VGL_LZ4")) lz4 = true;
 				}
 
 				virtual ~Compressor(void)
 				{
 					shutdown();
 					free(cframes);  cframes = NULL;
+                    free(lz4_buffer);
 				}
 
 				void run(void)
@@ -136,6 +139,9 @@ namespace server
 					cframes[storedFrames - 1] = cf;
 				}
 
+                std::tuple<char*, int> lz4_compress(unsigned char* bits,
+                                                    unsigned int size);
+
 				int storedFrames;  common::CompressedFrame **cframes;
 				common::Frame *frame, *lastFrame;
 				int myRank, nprocs;
@@ -143,6 +149,9 @@ namespace server
 				util::CriticalSection mutex;
 				common::Profiler profComp;
 				VGLTrans *parent;
+                char* lz4_buffer = nullptr;
+                size_t lz4_buffer_size = 0;
+                bool lz4 = false;
 		};
 	};
 }

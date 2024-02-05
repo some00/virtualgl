@@ -8,7 +8,7 @@ add_library(glframe STATIC GLFrame.cpp)
 target_link_libraries(glframe ${OPENGL_gl_LIBRARY})
 
 add_executable(vglclient vglclient.cpp ClientWin.cpp VGLTransReceiver.cpp)
-target_link_libraries(vglclient vglcommon ${FBXLIB} glframe vglsocket)
+target_link_libraries(vglclient vglcommon ${FBXLIB} glframe vglsocket LZ4::lz4_shared)
 install(TARGETS vglclient DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 configure_file(vglconnect.in ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/vglconnect

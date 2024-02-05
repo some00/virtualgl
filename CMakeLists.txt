@@ -17,6 +17,8 @@ string(TOLOWER ${CMAKE_PROJECT_NAME} CMAKE_PROJECT_NAME_LC)
 set(VERSION 3.1.1)
 set(DOCVERSION 3.1.1)
 
+find_package(lz4 REQUIRED)
+
 macro(boolean_number var)
 	if(${var})
 		set(${var} 1 ${ARGN})

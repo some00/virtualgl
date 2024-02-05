@@ -19,6 +19,7 @@
 #include "Log.h"
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <lz4.h>
 
 using namespace util;
 using namespace common;
@@ -303,6 +304,24 @@ void VGLTrans::sendFrame(Frame *f)
 	q.spoil((void *)f, _VGLTrans_spoilfct);
 }
 
+std::tuple<char*, int> VGLTrans::Compressor::lz4_compress(
+        unsigned char* bits, unsigned int size)
+{
+    if (!lz4)
+        return {reinterpret_cast<char*>(bits), size};
+    if (size > LZ4_MAX_INPUT_SIZE)
+        THROW("Invalid cframe size");
+    lz4_buffer_size = max(lz4_buffer_size,
+                          LZ4_compressBound(size));
+    lz4_buffer = (char*)realloc(lz4_buffer,
+                                sizeof(lz4_buffer[0]) * lz4_buffer_size);
+    const auto csize = LZ4_compress_default(reinterpret_cast<const char*>(bits),
+                                            lz4_buffer,
+                                            size,
+                                            lz4_buffer_size);
+    return {lz4_buffer, csize};
+}
+
 
 void VGLTrans::Compressor::compressSend(Frame *f, Frame *lastf)
 {
@@ -318,8 +337,10 @@ void VGLTrans::Compressor::compressSend(Frame *f, Frame *lastf)
 		profComp.startFrame();
 		cframe = *f;
 		profComp.endFrame(f->hdr.framew * f->hdr.frameh, 0, 1);
+        const auto [bits, size] = lz4_compress(cframe.bits, cframe.hdr.size);
+        cframe.hdr.size = size;
 		parent->sendHeader(cframe.hdr);
-		parent->send((char *)cframe.bits, cframe.hdr.size);
+		parent->send(bits, size);
 		return;
 	}
 
@@ -359,12 +380,18 @@ void VGLTrans::Compressor::compressSend(Frame *f, Frame *lastf)
 			delete tile;
 			if(myRank == 0)
 			{
+                const auto [bits, size] = lz4_compress(ctile->bits,
+                                                       ctile->hdr.size);
+                ctile->hdr.size = size;
 				parent->sendHeader(ctile->hdr);
-				parent->send((char *)ctile->bits, ctile->hdr.size);
+				parent->send(bits, size);
 				if(ctile->stereo && ctile->rbits)
 				{
+                    const auto [bits, size] = lz4_compress(ctile->rbits,
+                                                           ctile->rhdr.size);
+                    ctile->rhdr.size = size;
 					parent->sendHeader(ctile->rhdr);
-					parent->send((char *)ctile->rbits, ctile->rhdr.size);
+					parent->send(bits, size);
 				}
 			}
 			else
@@ -477,12 +504,16 @@ void VGLTrans::Compressor::send(void)
 	{
 		CompressedFrame *cf = cframes[i];
 		ERRIFNOT(cf);
+        const auto [bits, size] = lz4_compress(cf->bits, cf->hdr.size);
+        cf->hdr.size = size;
 		parent->sendHeader(cf->hdr);
-		parent->send((char *)cf->bits, cf->hdr.size);
+		parent->send(bits, size);
 		if(cf->stereo && cf->rbits)
 		{
+            const auto [bits, size] = lz4_compress(cf->rbits, cf->rhdr.size);
+            cf->rhdr.size = size;
 			parent->sendHeader(cf->rhdr);
-			parent->send((char *)cf->rbits, cf->rhdr.size);
+			parent->send(bits, size);
 		}
 		delete cf;
 	}
